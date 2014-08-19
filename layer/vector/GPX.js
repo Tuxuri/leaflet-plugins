@@ -1,5 +1,3 @@
-/*global L: true */
-
 L.GPX = L.FeatureGroup.extend({
 	initialize: function(gpx, options) {
 		L.Util.setOptions(this, options);
@@ -12,8 +10,8 @@ L.GPX = L.FeatureGroup.extend({
 	},
 	
 	loadXML: function(url, cb, options, async) {
-		if (async == undefined) async = this.options.async;
-		if (options == undefined) options = this.options;
+		if (async === undefined) async = this.options.async;
+		if (options === undefined) options = this.options;
 
 		var req = new window.XMLHttpRequest();
 		req.open('GET', url, async);
@@ -21,15 +19,35 @@ L.GPX = L.FeatureGroup.extend({
 			req.overrideMimeType('text/xml'); // unsupported by IE
 		} catch(e) {}
 		req.onreadystatechange = function() {
-			if (req.readyState != 4) return;
-			if(req.status == 200) cb(req.responseXML, options);
+			if (req.readyState !== 4) return;
+			if(req.status === 200) cb(req.responseXML, options);
 		};
 		req.send(null);
 	},
 
+	_humanLen: function(l) {
+		if (l < 2000)
+			return l.toFixed(0) + ' m';
+		else
+			return (l/1000).toFixed(1) + ' km';
+	},
+	
+	_polylineLen: function(line)//line is a L.Polyline()
+	{
+		var ll = line._latlngs;
+		var d = 0, p = null;
+		for (var i = 0; i < ll.length; i++)
+		{
+			if(i && p)
+				d += p.distanceTo(ll[i]);
+			p = ll[i];
+		}
+		return d;
+	},
+
 	addGPX: function(url, options, async) {
 		var _this = this;
-		var cb = function(gpx, options) { _this._addGPX(gpx, options) };
+		var cb = function(gpx, options) { _this._addGPX(gpx, options); };
 		this.loadXML(url, cb, options, async);
 	},
 
@@ -37,8 +55,8 @@ L.GPX = L.FeatureGroup.extend({
 		var layers = this.parseGPX(gpx, options);
 		if (!layers) return;
 		this.addLayer(layers);
-		this.fire("loaded");
-	},
+		this.fire('loaded');
+	},	
 
 	parseGPX: function(xml, options) {
 		var j, i, el, layers = [];
@@ -56,32 +74,40 @@ L.GPX = L.FeatureGroup.extend({
 		}
 
 		el = xml.getElementsByTagName('wpt');
-		for (i = 0; i < el.length; i++) {
-			var l = this.parse_wpt(el[i], xml, options);
-			if (!l) continue;
-			if (this.parse_name(el[i], l)) named = true;
-			layers.push(l);
+		if (options.display_wpt !== false) {
+			for (i = 0; i < el.length; i++) {
+				var marker = this.parse_wpt(el[i], xml, options);
+				if (!marker) continue;
+				if (this.parse_name(el[i], marker)) named = true;
+				layers.push(marker);
+			}
 		}
 
 		if (!layers.length) return;
 		var layer = layers[0];
 		if (layers.length > 1) 
 			layer = new L.FeatureGroup(layers);
-		//if (!named) this.parse_name(xml, layer);
+		if (!named) this.parse_name(xml, layer);
 		return layer;
 	},
 
 	parse_name: function(xml, layer) {
-		var i, el, name, descr="";
+		var i, el, txt='', name, descr='', len=0;
 		el = xml.getElementsByTagName('name');
-		if (el.length) name = el[0].childNodes[0].nodeValue;
+		if (el.length)
+			name = el[0].childNodes[0].nodeValue;
 		el = xml.getElementsByTagName('desc');
 		for (i = 0; i < el.length; i++) {
 			for (var j = 0; j < el[i].childNodes.length; j++)
 				descr = descr + el[i].childNodes[j].nodeValue;
 		}
-		if (!name) return;
-		var txt = "<h2>" + name + "</h2>" + descr;
+
+		if(layer instanceof L.Path)
+			len = this._polylineLen(layer);
+
+		if (name) txt += '<h2>' + name + '</h2>' + descr;
+		if (len) txt += '<p>' + this._humanLen(len) + '</p>';
+		
 		if (layer && layer._popup === undefined) layer.bindPopup(txt);
 		return txt;
 	},
@@ -102,7 +128,7 @@ L.GPX = L.FeatureGroup.extend({
 			coords.push(ll);
 		}
 		var l = [new L.Polyline(coords, options)];
-		this.fire('addline', {line:l})
+		this.fire('addline', {line:l});
 		return l;
 	},
 
